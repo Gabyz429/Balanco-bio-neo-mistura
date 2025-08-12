@@ -1,45 +1,41 @@
 
 import streamlit as st
 import pandas as pd
+from openpyxl import load_workbook
 
 st.set_page_config(page_title="Balanço Neo Bio (Completo)", layout="wide")
-
-# ---- Try to import openpyxl, but keep working without it ----
-try:
-    from openpyxl import load_workbook
-    OPENPYXL_OK = True
-except Exception:
-    OPENPYXL_OK = False
 
 PRIMARY = "#0B7A75"
 BG_APP  = "#F6F7F9"
 BG_CARD = "#FFFFFF"
 
-st.markdown(f"""
+css = """
 <style>
 .stApp, section.main, div[data-testid='stAppViewContainer'], div.block-container {{
-  background: {BG_APP} !important;
+  background: {bg_app} !important;
 }}
 .card {{
-  background:{BG_CARD}; border:1px solid #eef0f2; border-radius:16px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,.05);
+  background:{bg_card}; border:1px solid #eef0f2; border-radius:16px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,.05);
 }}
 .grid3 {{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}
+.grid2 {{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 </style>
-""", unsafe_allow_html=True)
+""".format(bg_app=BG_APP, bg_card=BG_CARD)
 
+st.markdown(css, unsafe_allow_html=True)
 st.title("Balanço Neo Bio — Aba Completo")
 
 # ------------- Load defaults -------------
-DEFAULTS_HARDCODED = {{
+DEFAULTS_HARDCODED = {
     "C4_Cana": 0.0, "C5_K_cana": 0.0, "C6_vazao_vinho": 100.0, "C8_ds": 8.5, "C9_gl": 14.5,
     "C19_vazao": 0.0, "C20_ds": 0.0, "C21_gl": 0.0, "H8_consumo_to_be": 1.65
-}}
+}
 
 def read_defaults_from_xlsx(file):
     wb = load_workbook(file, data_only=False)
     ws = wb["Completo"]
     v = lambda r,c: ws.cell(r,c).value
-    return {{
+    return {
         "C4_Cana": v(4,3) or 0.0,
         "C5_K_cana": v(5,3) or 0.0,
         "C6_vazao_vinho": v(6,3) or 0.0,
@@ -49,29 +45,26 @@ def read_defaults_from_xlsx(file):
         "C20_ds": v(20,3) or 0.0,
         "C21_gl": v(21,3) or 0.0,
         "H8_consumo_to_be": v(8,8) or 0.0,
-    }}
+    }
 
 defaults = DEFAULTS_HARDCODED.copy()
 
 st.sidebar.header("📄 Planilha (opcional)")
-if OPENPYXL_OK:
-    up = st.sidebar.file_uploader("Carregar 'Balanço Neo Bio (1).xlsx' (aba Completo)", type=["xlsx"])
-    if up is not None:
-        try:
-            defaults = read_defaults_from_xlsx(up)
-            st.sidebar.success("Valores padrão lidos da planilha.")
-        except Exception as e:
-            st.sidebar.error(f"Não consegui ler a planilha: {e}")
-else:
-    st.sidebar.warning("openpyxl não está instalado. O app usa valores padrão embutidos.\nAdicione 'openpyxl' no requirements.txt para ler a planilha automaticamente.")
+up = st.sidebar.file_uploader("Carregar 'Balanço Neo Bio (1).xlsx' (aba Completo)", type=["xlsx"])
+if up is not None:
+    try:
+        defaults = read_defaults_from_xlsx(up)
+        st.sidebar.success("Valores padrão lidos da planilha.")
+    except Exception as e:
+        st.sidebar.error(f"Não consegui ler a planilha: {e}")
 
-# ---------- Inputs / Outputs (resumo) ----------
 def fmt(x, nd=3):
     try:
         return f"{float(x):,.{nd}f}".replace(",","X").replace(".",",").replace("X",".")
     except:
         return str(x)
 
+# --------- 1) Dados da Bio ---------
 st.header("1) Dados da Bio")
 col1,col2,col3,col4 = st.columns(4)
 with col1:
@@ -88,7 +81,7 @@ with col5:
 with col6:
     C9 = st.number_input("Conc GL C9 (variar)", min_value=0.0, value=float(defaults["C9_gl"]), step=0.1, format="%.3f")
 
-# Fórmulas
+# Fórmulas (iguais à planilha)
 C7  = (C4*C5/C6) if C6 else 0.0
 C10 = (-0.244*C9 + 4.564)
 C11 = (C6*C9/96.0*C10)
@@ -105,6 +98,7 @@ st.markdown(f'<div class="card"><b>V1 total as is (C11)</b><div style="font-size
 st.markdown(f'<div class="card"><b>Vinhaça (C15)</b><div style="font-size:1.3rem">{fmt(C15)}</div><div>Fórmula: C6 - C12*0.789 + C11 - C14</div></div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
+# --------- 2) Dados Neo ---------
 st.header("2) Dados Neo (Volante Neo - Vinho)")
 colN1,colN2,colN3 = st.columns(3)
 with colN1:
@@ -114,6 +108,7 @@ with colN2:
 with colN3:
     C21 = st.number_input("Conc GL C21 (variar)", min_value=0.0, value=float(defaults["C21_gl"]), step=0.1, format="%.3f")
 
+# --------- 3) Dados da Mistura ---------
 st.header("3) Dados da Mistura")
 H5 = C19 + C6
 H6 = ((C19*C20 + C6*C8) / H5) if H5 else 0.0
@@ -137,10 +132,19 @@ st.markdown(f'<div class="card"><b>H14 Vinhaça (m³/h)</b><div style="font-size
 st.markdown(f'<div class="card"><b>H15 %Ds</b><div style="font-size:1.3rem">{fmt(H15*100,2)} %</div><div>Fórmula: H5*H6/H14</div></div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
+# --------- 4) Produções & Financeiro ---------
 st.header("4) Produções & Financeiro")
 preco_etanol = st.number_input("Preço etanol (R$/m³)", min_value=0.0, value=2800.0, step=50.0, format="%.2f")
 producao_as_is_m3dia = C13
 producao_to_be_m3dia = H12
 delta_producao = producao_to_be_m3dia - producao_as_is_m3dia
+
+st.markdown('<div class="grid2">', unsafe_allow_html=True)
+st.markdown(f"<div class='card'><b>Etanol (as is) — C13:</b> {fmt(producao_as_is_m3dia)}</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='card'><b>Etanol (to be) — H12:</b> {fmt(producao_to_be_m3dia)}</div>", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="grid2">', unsafe_allow_html=True)
 st.markdown(f"<div class='card'><b>Δ Produção (m³/dia):</b> {fmt(delta_producao)}</div>", unsafe_allow_html=True)
 st.markdown(f"<div class='card'><b>Δ Receita (R$/dia):</b> {fmt(delta_producao*preco_etanol,2)}</div>", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
